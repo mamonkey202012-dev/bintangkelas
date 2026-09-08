@@ -20,6 +20,17 @@ export const extractFile = (file) => {
 export const generateMaterials = (source_text, difficulty = "sedang") =>
   api.post("/materials/generate", { source_text, difficulty }).then((r) => r.data);
 export const applyMaterials = (payload) => api.post("/materials/apply", payload).then((r) => r.data);
+export const downloadHistorySource = async (id, filename) => {
+  const r = await api.get(`/materials/history/${id}/source`, { responseType: "blob" });
+  const url = URL.createObjectURL(r.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "sumber-materi";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
 export const resetMaterials = () => api.post("/materials/reset").then((r) => r.data);
 export const listHistory = () => api.get("/materials/history").then((r) => r.data);
 export const applyFromHistory = (id) => api.post(`/materials/history/${id}/apply`).then((r) => r.data);

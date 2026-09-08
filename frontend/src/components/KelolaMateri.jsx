@@ -3,11 +3,12 @@ import { toast } from "sonner";
 import {
   BookOpen, Download, Sparkles, FileText, ExternalLink, CheckCircle2,
   RefreshCw, Wand2, Save, RotateCcw, Info, Share2, Link as LinkIcon,
-  Copy, History, Trash2, RotateCw, Smile, Zap, Flame, Upload, FileUp
+  Copy, History, Trash2, RotateCw, Smile, Zap, Flame, Upload, FileUp,
+  FileDown, X
 } from "lucide-react";
 import {
   getCurrentMaterials, getSampleText, generateMaterials, applyMaterials, resetMaterials,
-  listHistory, applyFromHistory, deleteHistory, extractFile,
+  listHistory, applyFromHistory, deleteHistory, extractFile, downloadHistorySource,
 } from "@/lib/api";
 
 const DIFFICULTIES = [
@@ -117,6 +118,16 @@ function HistorySection({ onApplied }) {
     finally { setBusyId(null); }
   };
 
+  const downloadSource = async (it) => {
+    setBusyId(it.id);
+    try {
+      await downloadHistorySource(it.id, it.source_file?.filename);
+      toast.success("File sumber diunduh.");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Gagal mengunduh sumber.");
+    } finally { setBusyId(null); }
+  };
+
   const badge = (d) => {
     const map = { mudah: "bg-emerald-50 text-emerald-700 border-emerald-200",
                   sedang:"bg-sky-50 text-sky-700 border-sky-200",
@@ -131,7 +142,7 @@ function HistorySection({ onApplied }) {
           <History className="w-4 h-4 text-slate-500" />
           <div>
             <div className="font-display font-bold text-slate-900">Riwayat Materi Bapak/Ibu</div>
-            <div className="text-xs text-slate-500">Materi yang pernah dibuat — pakai lagi di semester berikutnya.</div>
+            <div className="text-xs text-slate-500">Materi yang pernah dibuat — pakai lagi & unduh file sumbernya kapan saja.</div>
           </div>
         </div>
         <span className="text-xs text-slate-500">{items.length} tersimpan</span>
@@ -152,7 +163,7 @@ function HistorySection({ onApplied }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-slate-800 text-sm truncate">{it.topic}</div>
-                <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
                   <span>{new Date(it.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</span>
                   <span>·</span>
                   <span>{it.materi?.length || 0} materi</span>
@@ -163,8 +174,24 @@ function HistorySection({ onApplied }) {
                       {it.difficulty}
                     </span>
                   )}
+                  {it.source_file?.storage_path && (
+                    <span className="px-1.5 py-0.5 rounded-full border text-[10px] font-semibold bg-amber-50 text-amber-700 border-amber-200 inline-flex items-center gap-1">
+                      <FileText className="w-2.5 h-2.5" /> {it.source_file.filename}
+                    </span>
+                  )}
                 </div>
               </div>
+              {it.source_file?.storage_path && (
+                <button
+                  data-testid={`btn-download-source-${it.id}`}
+                  onClick={() => downloadSource(it)}
+                  disabled={busyId === it.id}
+                  title="Unduh file sumber"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold disabled:opacity-60"
+                >
+                  <FileDown className="w-3.5 h-3.5" /> Unduh Sumber
+                </button>
+              )}
               <button
                 data-testid={`btn-reuse-${it.id}`}
                 onClick={() => reapply(it.id)}
@@ -201,6 +228,7 @@ export default function KelolaMateri({ onApplied }) {
   const [historyKey, setHistoryKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadedName, setUploadedName] = useState(null);
+  const [sourceFile, setSourceFile] = useState(null); // {storage_path, filename, content_type, size}
 
   const refresh = async () => {
     const fresh = await getCurrentMaterials();
@@ -227,13 +255,19 @@ export default function KelolaMateri({ onApplied }) {
     setUploading(true);
     setUploadedName(null);
     const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
-    toast.info(isPdf ? "Membaca isi PDF…" : "AI sedang membaca gambar halaman buku…");
+    toast.info(isPdf ? "Membaca isi PDF & mengarsipkan file…" : "AI sedang membaca gambar & mengarsipkan file…");
     try {
       const r = await extractFile(file);
       const prev = sourceText.trim();
       setSourceText(prev ? `${prev}\n\n${r.text}` : r.text);
       setUploadedName(file.name);
-      toast.success(`Berhasil! ${r.text.length} karakter berhasil diambil dari ${isPdf ? "PDF" : "gambar"}.`);
+      if (r.source_file) {
+        setSourceFile(r.source_file);
+        toast.success(`Berhasil! ${r.text.length} karakter diambil & file asli tersimpan.`);
+      } else {
+        setSourceFile(null);
+        toast.success(`Berhasil! ${r.text.length} karakter diambil dari ${isPdf ? "PDF" : "gambar"}.`);
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Gagal membaca file.");
     } finally { setUploading(false); }
@@ -276,9 +310,12 @@ export default function KelolaMateri({ onApplied }) {
         materi: preview.materi,
         quiz: preview.quiz,
         difficulty: preview.difficulty || difficulty,
+        source_file: sourceFile,
       });
       await refresh();
       setPreview(null);
+      setSourceFile(null);
+      setUploadedName(null);
       toast.success("Materi diterapkan! Otomatis tersimpan ke riwayat.");
     } catch { toast.error("Gagal menerapkan materi."); }
     finally { setApplying(false); }
@@ -403,6 +440,15 @@ export default function KelolaMateri({ onApplied }) {
         {uploadedName && !uploading && (
           <div className="mb-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5" data-testid="uploaded-badge">
             <CheckCircle2 className="w-3.5 h-3.5" /> Teks dari <strong className="mx-0.5">{uploadedName}</strong> ditambahkan ke kotak di bawah.
+            {sourceFile?.storage_path && <span className="ml-1 text-emerald-800/80">· file asli diarsipkan</span>}
+            <button
+              data-testid="btn-clear-source-file"
+              onClick={() => { setSourceFile(null); setUploadedName(null); }}
+              className="ml-1 text-emerald-700 hover:text-rose-600"
+              title="Lupakan file ini"
+            >
+              <X className="w-3 h-3" />
+            </button>
           </div>
         )}
 

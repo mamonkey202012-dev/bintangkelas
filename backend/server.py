@@ -19,6 +19,73 @@ from datetime import datetime, timezone, timedelta
 OWNER_EMAIL = "mamon.key.2020.12@gmail.com"
 EMERGENT_AUTH_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 
+# ============== OBJECT STORAGE ==============
+STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+APP_NAME = "bintangkelas"
+_storage_key: Optional[str] = None
+
+def init_storage(force: bool = False) -> Optional[str]:
+    global _storage_key
+    if _storage_key and not force:
+        return _storage_key
+    key = os.environ.get("EMERGENT_LLM_KEY")
+    if not key:
+        return None
+    try:
+        import requests
+        r = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": key}, timeout=30)
+        r.raise_for_status()
+        _storage_key = r.json().get("storage_key")
+        return _storage_key
+    except Exception:
+        logging.exception("Storage init failed")
+        return None
+
+def put_object(path: str, data: bytes, content_type: str) -> Optional[dict]:
+    key = init_storage()
+    if not key:
+        return None
+    try:
+        import requests
+        r = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data,
+            timeout=120,
+        )
+        if r.status_code == 404:
+            init_storage(force=True)
+            key = _storage_key
+            r = requests.put(
+                f"{STORAGE_URL}/objects/{path}",
+                headers={"X-Storage-Key": key, "Content-Type": content_type},
+                data=data,
+                timeout=120,
+            )
+        r.raise_for_status()
+        return r.json()
+    except Exception:
+        logging.exception("put_object failed")
+        return None
+
+def get_object(path: str):
+    key = init_storage()
+    if not key:
+        return None, None
+    try:
+        import requests
+        r = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+        if r.status_code == 404:
+            init_storage(force=True)
+            key = _storage_key
+            r = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+        r.raise_for_status()
+        return r.content, r.headers.get("Content-Type", "application/octet-stream")
+    except Exception:
+        logging.exception("get_object failed")
+        return None, None
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -311,6 +378,7 @@ class MaterialsApply(BaseModel):
     materi: List[dict]
     quiz: List[dict]
     difficulty: Optional[str] = None
+    source_file: Optional[dict] = None
 
 @api_router.post("/materials/apply")
 async def apply_materials(
@@ -345,9 +413,39 @@ async def apply_materials(
             "materi": payload.materi,
             "quiz": payload.quiz,
             "difficulty": payload.difficulty,
+            "source_file": payload.source_file,
             "created_at": now,
         })
     return {"ok": True, "applied_at": now}
+
+@api_router.get("/materials/history/{hist_id}/source")
+async def download_history_source(
+    hist_id: str,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+    auth: Optional[str] = None,
+):
+    # allow ?auth=<token> for direct browser downloads
+    if not authorization and auth:
+        authorization = f"Bearer {auth}"
+    user = await get_current_user(request, session_token, authorization)
+    hist = await db.materials_history.find_one({"id": hist_id, "user_id": user.user_id}, {"_id": 0})
+    if not hist:
+        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+    sf = hist.get("source_file") or {}
+    path = sf.get("storage_path")
+    if not path:
+        raise HTTPException(status_code=404, detail="Materi ini tidak memiliki file sumber tersimpan")
+    data, ctype = get_object(path)
+    if not data:
+        raise HTTPException(status_code=502, detail="Gagal mengambil file dari penyimpanan")
+    fname = sf.get("filename") or "sumber-materi"
+    return Response(
+        content=data,
+        media_type=sf.get("content_type") or ctype or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 @api_router.get("/materials/history")
 async def list_history(
@@ -403,6 +501,27 @@ async def delete_history(
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
+def _ext_from(fname: str, ctype: str) -> str:
+    fname = (fname or "").lower()
+    if "." in fname:
+        return fname.rsplit(".", 1)[-1]
+    m = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+    return m.get((ctype or "").lower(), "bin")
+
+def _archive_source(contents: bytes, fname: str, ctype: str) -> Optional[dict]:
+    """Best-effort upload of original file to object storage. Returns metadata or None."""
+    ext = _ext_from(fname, ctype)
+    path = f"{APP_NAME}/sources/{uuid.uuid4().hex}.{ext}"
+    result = put_object(path, contents, ctype or "application/octet-stream")
+    if not result:
+        return None
+    return {
+        "storage_path": result.get("path") or path,
+        "filename": fname or f"sumber.{ext}",
+        "content_type": ctype or "application/octet-stream",
+        "size": result.get("size") or len(contents),
+    }
+
 @api_router.post("/materials/extract")
 async def extract_from_file(file: UploadFile = File(...)):
     """Read a PDF or image and return extracted plain text for the guru's textarea."""
@@ -432,7 +551,8 @@ async def extract_from_file(file: UploadFile = File(...)):
                     status_code=422,
                     detail="PDF ini sepertinya hasil scan/gambar. Coba unggah sebagai foto (.jpg/.png) supaya bisa dibaca AI.",
                 )
-            return {"text": text, "source": "pdf", "pages": len(reader.pages), "filename": file.filename}
+            src = _archive_source(contents, file.filename, file.content_type or "application/pdf")
+            return {"text": text, "source": "pdf", "pages": len(reader.pages), "filename": file.filename, "source_file": src}
         except HTTPException:
             raise
         except Exception as e:
@@ -460,7 +580,8 @@ async def extract_from_file(file: UploadFile = File(...)):
             text = (raw if isinstance(raw, str) else str(raw)).strip()
             if len(text) < 20:
                 raise HTTPException(status_code=422, detail="Tidak ada teks jelas di gambar.")
-            return {"text": text, "source": "image_ocr", "filename": file.filename}
+            src = _archive_source(contents, file.filename, file.content_type or "image/jpeg")
+            return {"text": text, "source": "image_ocr", "filename": file.filename, "source_file": src}
         except HTTPException:
             raise
         except Exception as e:
@@ -827,6 +948,15 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def on_startup():
+    # Init object storage (best-effort)
+    try:
+        if init_storage():
+            logger.info("Storage initialized")
+        else:
+            logger.warning("Storage init returned None (source archiving disabled)")
+    except Exception:
+        logger.exception("Storage init failed")
+
     # auto-seed on empty DB so demo is instant
     existing = await db.submissions.count_documents({})
     if existing == 0:
