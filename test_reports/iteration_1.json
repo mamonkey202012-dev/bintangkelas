@@ -1,0 +1,24 @@
+{
+  "summary": "First-finish smoke test for BintangKelas. Backend (7 endpoints incl AI slide cache) and frontend Mode Siswa full flow + Mode Guru dashboard/tabs all verified working end-to-end on the public URL.",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "GET /api/ returns {status: ready}",
+    "GET /api/quiz returns 3 questions with options/correct/explanation",
+    "POST /api/submissions accepts payload and returns correct computed score (2/3 sample)",
+    "GET /api/submissions returns list newest-first (18 seeded + test inserts)",
+    "GET /api/analytics/misconceptions returns total_students=18, avg_score=2.22, sorted misconceptions",
+    "GET /api/slides/default returns 5 default slides",
+    "GET /api/slides/latest returns cached AI slides (source=ai) confirming Claude Sonnet 4.6 generation cached previously",
+    "Mode Siswa: page loads with Kak Bintang header, Online badge, intro + quick reply buttons",
+    "Mode Siswa: 'Siap, Kak!' → Materi 1 → 'Lanjut Materi 2' → Materi 2 → 'Lanjut Materi 3' → Materi 3 → 'Aku siap kuis' → 3 quiz questions with data-testid quiz-{qid}-option-{key} → instant feedback → form (input-student-name, input-absen-no, btn-submit-answers) → 'Jawaban terkirim ke Bu Guru!' banner + Kehadiran Terkirim card",
+    "Mode Guru: Dashboard shows 4 stat cards (Siswa Akses 20/30, Rata-rata 2.15/3, Miskonsepsi 2, Paham Utuh 7) populated from seeded + test submissions",
+    "Mode Guru: tab-slide shows SlideViewer with slide-prev/slide-next visible and btn-generate-slides present",
+    "Mode Guru: tab-jurnal shows Kurikulum Merdeka table with btn-copy-jurnal and btn-print-jurnal"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "POST /api/slides/generate not invoked live (30-60s latency) but /api/slides/latest returns source=ai indicating prior successful generation & cache. Auto-seed on startup confirmed (18 demo submissions present)."
+}

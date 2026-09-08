@@ -1,0 +1,133 @@
+{
+  "project_name": "BintangKelas - Flipped Classroom IPAS Kelas 6 SD",
+  "app_type": "hybrid_fullstack",
+  "theme": "Cheerful Blue & Teal (Biru Ceria & Toska) Educational Dual-Mode App",
+  "target_audience": "Siswa Kelas 6 SD (11-12 Tahun) & Guru IPAS Sekolah Dasar",
+  "design_archetype": "Pastel & Soft Friendly Education + Clean Modern Dashboard",
+
+  "colors": {
+    "primary": {
+      "main": "#0284C7",
+      "light": "#38BDF8",
+      "dark": "#0369A1",
+      "gradient": "from-sky-600 to-teal-500",
+      "label": "Biru Ceria Bintang"
+    },
+    "secondary": {
+      "main": "#0D9488",
+      "light": "#2DD4BF",
+      "dark": "#0F766E",
+      "gradient": "from-teal-600 to-emerald-500",
+      "label": "Toska Edukasi"
+    },
+    "accent": {
+      "yellow": "#F59E0B",
+      "amber_light": "#FEF3C7",
+      "green_success": "#10B981",
+      "green_chat_bubble": "#DCF8C6",
+      "whatsapp_header": "#075E54",
+      "whatsapp_dark": "#128C7E",
+      "purple_quiz": "#8B5CF6"
+    },
+    "backgrounds": {
+      "app_bg": "#F0F9FF",
+      "mobile_frame_bg": "#E5DDD5",
+      "chat_bg_pattern": "subtle-chat-pattern",
+      "card_bg": "#FFFFFF",
+      "dashboard_sidebar": "#0F172A",
+      "dashboard_bg": "#F8FAFC"
+    },
+    "text": {
+      "heading": "#0F172A",
+      "body": "#334155",
+      "muted": "#64748B",
+      "chat_time": "#94A3B8"
+    }
+  },
+
+  "typography": {
+    "font_family_heading": "Outfit, Plus Jakarta Sans, sans-serif",
+    "font_family_body": "Inter, DM Sans, sans-serif",
+    "font_family_chat": "Segoe UI, Roboto, Helvetica, sans-serif",
+    "scale": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "h4": "text-lg font-semibold",
+      "body_lg": "text-base leading-relaxed",
+      "body": "text-sm leading-normal",
+      "chat_text": "text-[14.5px] leading-snug",
+      "caption": "text-xs text-slate-500"
+    }
+  },
+
+  "layout_and_navigation": {
+    "header_toggle": {
+      "position": "fixed top-0 left-0 right-0 z-50 h-16 bg-white/90 backdrop-blur-md border-b border-sky-100 px-4 sm:px-8 flex items-center justify-between shadow-sm",
+      "brand": "Logo BintangKelas with animated star badge + 'IPAS Kelas 6: Sistem Pencernaan'",
+      "mode_switch": "Segmented Dual-Pill Toggle (Mode Siswa - HP vs Mode Guru - Dashboard KBM) with icon indicators, smooth transition animation, and active state badge",
+      "data_testid": "header-mode-toggle-switch"
+    },
+    "mode_siswa": {
+      "container": "pt-20 pb-12 flex justify-center items-center min-h-screen bg-slate-900/90 sm:bg-slate-900/95 sm:py-20 p-2 sm:p-6",
+      "mobile_frame": "w-full max-w-[420px] h-[840px] max-h-[92vh] bg-[#E5DDD5] rounded-[36px] shadow-2xl overflow-hidden border-8 border-slate-800 relative flex flex-col font-sans text-slate-800",
+      "android_status_bar": "h-7 bg-[#075E54] text-white px-5 text-xs flex justify-between items-center font-mono select-none",
+      "chat_header": "h-16 bg-[#075E54] text-white px-4 flex items-center justify-between shadow-md z-10",
+      "chat_profile": "Avatar Kak Bintang with online badge, name 'Kak Bintang IPAS 🚀', and 'Online (Tersedia 24 Jam)' text",
+      "chat_body": "flex-1 overflow-y-auto p-4 space-y-3 bg-[#E5DDD5] bg-opacity-90 relative",
+      "chat_input_bar": "p-3 bg-[#F0F0F0] border-t border-slate-300 flex items-center gap-2"
+    },
+    "mode_guru": {
+      "container": "pt-20 px-4 sm:px-8 pb-16 max-w-7xl mx-auto space-y-8 bg-slate-50 min-h-screen",
+      "summary_grid": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5",
+      "main_section_tabs": "Tabs for [1. Rekap Hasil Siswa & Miskonsepsi], [2. Generator Slide KBM (5 Slide)], [3. Jurnal Harian Kurikulum Merdeka]"
+    }
+  },
+
+  "key_features_design": {
+    "feature_1_mode_siswa_chat": {
+      "description": "WhatsApp-style vertical chat interface tailored for 6th grade elementary students.",
+      "components": [
+        "Greeting message from Kak Bintang with voice note audio toggle simulation",
+        "Quick Reply Buttons (e.g. 'Mulai Belajar 🚀', 'Lihat Organ 🍎', 'Coba Kuis 📝')",
+        "3 Sequential Learning Cards (Materi 1: Mulut & Kerongkongan, Materi 2: Lambung & Usus Halus, Materi 3: Usus Besar & Anus) with diagrams and interactive popup info",
+        "Diagnostic Quiz Module: 3 Interactive Multiple Choice Questions with immediate feedback explanations and score tally",
+        "Student Attendance Form: Form input for Nama Lengkap and Nomor Absen, with Kirim Kehadiran button",
+        "Completion Banner & Confetti effect on submit"
+      ]
+    },
+    "feature_2_mode_guru_dashboard": {
+      "description": "KBM Dashboard for Teacher with data analytics, presentation slides, and Kurikulum Merdeka daily journal.",
+      "components": [
+        "Header Stats: Total Siswa Akses (e.g. 28/30), Rata-rata Skor (84.5), Miskonsepsi Terdeteksi (2 Topik), Siap KBM (93%)",
+        "Student Recap Table: Name, Absen No, Access Time, Quiz Score, Status Badge (Paham Utuh / Miskonsepsi / Belum Akses), Action Detail",
+        "Kartu Analisis Miskonsepsi: Visual insights highlighting misconceptions (e.g., 'Siswa menganggap pencernaan makanan hanya terjadi di lambung') with suggested teacher action points",
+        "Adaptive Slide Presenter Viewer: 5-Slide interactive deck viewer with Fullscreen mode, Next/Prev controls, Slide jump menu, and Presenter Notes drawer",
+        "Jurnal Harian Guru Table (Kurikulum Merdeka): Official table format ready to copy/print containing TP, Alur Flipped Classroom, Diagnostic Result Summary, and Reflection notes"
+      ]
+    }
+  },
+
+  "image_urls": {
+    "digestive_system_diagram": "https://images.unsplash.com/photo-1743767587835-7a80fe384236?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwxfHxodW1hbiUyMGRpZ2VzdGl2ZSUyMHN5c3RlbSUyMGlsbHVzdHJhdGlvbiUyMDNkJTIwY2FydG9vbnxlbnwwfHx8fDE3ODg4NzE0NDR8MA&ixlib=rb-4.1.0&q=85",
+    "small_intestine_illustration": "https://images.unsplash.com/photo-1743767587861-2a932969286e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwyfHxodW1hbiUyMGRpZ2VzdGl2ZSUyMHN5c3RlbSUyMGlsbHVzdHJhdGlvbiUyMDNkJTIwY2FydG9vbnxlbnwwfHx8fDE3ODg4NzE0NDR8MA&ixlib=rb-4.1.0&q=85",
+    "students_classroom": "https://images.unsplash.com/photo-1623287072519-d224cfbac5a1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwzfHxlbGVtZW50YXJ5JTIwc3R1ZGVudCUyMGxlYXJuaW5nJTIwc2NpZW5jZSUyMGNhcnRvb258ZW58MHx8fHwxNzg4ODcxNDQ0fDA&ixlib=rb-4.1.0&q=85",
+    "science_experiment_child": "https://images.unsplash.com/photo-1633828763399-e29f1cd3f4c1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxlbGVtZW50YXJ5JTIwc3R1ZGVudCUyMGxlYXJuaW5nJTIwc2NpZW5jZSUyMGNhcnRvb258ZW58MHx8fHwxNzg4ODcxNDQ0fDA&ixlib=rb-4.1.0&q=85",
+    "teacher_student_lab": "https://images.unsplash.com/photo-1758685734160-3a2f6f73f3b5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHw0fHxlbGVtZW50YXJ5JTIwc3R1ZGVudCUyMGxlYXJuaW5nJTIwc2NpZW5jZSUyMGNhcnRvb258ZW58MHx8fHwxNzg4ODcxNDQ0fDA&ixlib=rb-4.1.0&q=85"
+  },
+
+  "instructions_to_main_agent": [
+    "Ensure the dual mode toggle at top-right switches smoothly between Mode Siswa (WhatsApp-style Android Chat UI) and Mode Guru (KBM Dashboard).",
+    "In Mode Siswa, mimic Android WhatsApp UI with Kak Bintang profile, Online status indicator, green header, timestamped chat bubbles, diagnostic quiz cards with instant feedback explanations, and student attendance form.",
+    "Include realistic dummy data in Indonesian tailored for Grade 6 SD IPAS (Sistem Pencernaan Manusia: Mulut, Kerongkongan, Lambung, Usus Halus, Usus Besar, Anus).",
+    "In Mode Guru, render teacher analytics, misconception cards, 5-slide presentation viewer with fullscreen toggle, and Kurikulum Merdeka Daily Journal table with Print & Copy buttons.",
+    "All interactive elements MUST include explicit data-testid attributes for automated testing."
+  ],
+
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "test_id_requirement": "All interactive buttons, inputs, tabs, modal triggers, and quiz options MUST include data-testid (e.g. data-testid='mode-toggle-siswa', data-testid='quiz-option-a', data-testid='submit-attendance-btn').",
+    "no_transparent_headers": "Header and overlay backgrounds must use solid or semi-opaque background with blur (e.g. bg-white/90 backdrop-blur-md) so text remains readable.",
+    "no_universal_transition": "Do not apply transition: all globally. Apply targeted transitions on hover/focus states.",
+    "file_extension_rule": "Use React JavaScript (.js / .jsx) files for components as specified in the frontend repository structure."
+  }
+}
