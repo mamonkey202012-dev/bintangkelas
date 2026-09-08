@@ -8,6 +8,15 @@ export const api = axios.create({ baseURL: API, timeout: 60000, withCredentials:
 export const getQuiz = () => api.get("/quiz").then((r) => r.data);
 export const getCurrentMaterials = () => api.get("/materials/current").then((r) => r.data);
 export const getSampleText = () => api.get("/materials/sample").then((r) => r.data);
+export const extractFile = (file) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  return api.post("/materials/extract", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+    timeout: 120000,
+  }).then((r) => r.data);
+};
+
 export const generateMaterials = (source_text, difficulty = "sedang") =>
   api.post("/materials/generate", { source_text, difficulty }).then((r) => r.data);
 export const applyMaterials = (payload) => api.post("/materials/apply", payload).then((r) => r.data);

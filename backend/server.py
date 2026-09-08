@@ -1,13 +1,16 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
 import json
+import base64
 import logging
 import re
 import uuid
 import httpx
+import pypdf
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -397,6 +400,74 @@ async def delete_history(
     if r.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Tidak ditemukan")
     return {"ok": True}
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+
+@api_router.post("/materials/extract")
+async def extract_from_file(file: UploadFile = File(...)):
+    """Read a PDF or image and return extracted plain text for the guru's textarea."""
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Ukuran file melebihi 5 MB. Kompres dulu ya.")
+    if len(contents) < 200:
+        raise HTTPException(status_code=400, detail="File terlalu kecil / kosong.")
+
+    fname = (file.filename or "").lower()
+    ctype = (file.content_type or "").lower()
+    is_pdf = fname.endswith(".pdf") or "pdf" in ctype
+    is_image = ctype.startswith("image/") or fname.endswith((".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"))
+
+    if is_pdf:
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(contents))
+            parts: List[str] = []
+            for page in reader.pages:
+                try:
+                    parts.append(page.extract_text() or "")
+                except Exception:
+                    continue
+            text = "\n\n".join(p.strip() for p in parts if p.strip()).strip()
+            if len(text) < 40:
+                raise HTTPException(
+                    status_code=422,
+                    detail="PDF ini sepertinya hasil scan/gambar. Coba unggah sebagai foto (.jpg/.png) supaya bisa dibaca AI.",
+                )
+            return {"text": text, "source": "pdf", "pages": len(reader.pages), "filename": file.filename}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception("PDF extract failed")
+            raise HTTPException(status_code=500, detail=f"Gagal membaca PDF: {e}")
+
+    if is_image:
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(status_code=503, detail="OCR gambar belum tersedia")
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+            b64 = base64.b64encode(contents).decode("utf-8")
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"ocr-{uuid.uuid4().hex[:8]}",
+                system_message=(
+                    "Kamu adalah OCR untuk halaman buku pelajaran Bahasa Indonesia. "
+                    "Baca semua teks yang terlihat di gambar. Kembalikan HANYA teks apa adanya, "
+                    "paragraf dipisah baris kosong. JANGAN tambahkan komentar, judul, atau markdown."
+                ),
+            ).with_model("anthropic", "claude-sonnet-4-6")
+            img = ImageContent(image_base64=b64)
+            raw = await chat.send_message(UserMessage(text="Baca semua teks di gambar halaman buku ini:", file_contents=[img]))
+            text = (raw if isinstance(raw, str) else str(raw)).strip()
+            if len(text) < 20:
+                raise HTTPException(status_code=422, detail="Tidak ada teks jelas di gambar.")
+            return {"text": text, "source": "image_ocr", "filename": file.filename}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception("Image OCR failed")
+            raise HTTPException(status_code=500, detail=f"Gagal membaca gambar: {e}")
+
+    raise HTTPException(status_code=400, detail="Format tidak didukung. Unggah PDF atau gambar (JPG/PNG).")
 
 @api_router.post("/materials/reset")
 async def reset_materials():

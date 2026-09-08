@@ -3,11 +3,11 @@ import { toast } from "sonner";
 import {
   BookOpen, Download, Sparkles, FileText, ExternalLink, CheckCircle2,
   RefreshCw, Wand2, Save, RotateCcw, Info, Share2, Link as LinkIcon,
-  Copy, History, Trash2, RotateCw, Smile, Zap, Flame
+  Copy, History, Trash2, RotateCw, Smile, Zap, Flame, Upload, FileUp
 } from "lucide-react";
 import {
   getCurrentMaterials, getSampleText, generateMaterials, applyMaterials, resetMaterials,
-  listHistory, applyFromHistory, deleteHistory,
+  listHistory, applyFromHistory, deleteHistory, extractFile,
 } from "@/lib/api";
 
 const DIFFICULTIES = [
@@ -199,6 +199,8 @@ export default function KelolaMateri({ onApplied }) {
   const [applying, setApplying] = useState(false);
   const [preview, setPreview] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedName, setUploadedName] = useState(null);
 
   const refresh = async () => {
     const fresh = await getCurrentMaterials();
@@ -208,6 +210,34 @@ export default function KelolaMateri({ onApplied }) {
   };
 
   useEffect(() => { getCurrentMaterials().then(setCurrent); }, []);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    const MAX = 5 * 1024 * 1024;
+    if (file.size > MAX) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
+      toast.warning(`File terlalu besar (${mb} MB). Maksimal 5 MB — coba kompres dulu.`);
+      return;
+    }
+    const ok = /\.(pdf|jpe?g|png|webp|heic|heif)$/i.test(file.name) || file.type.startsWith("image/") || file.type === "application/pdf";
+    if (!ok) {
+      toast.error("Format tidak didukung. Gunakan PDF atau gambar (JPG/PNG).");
+      return;
+    }
+    setUploading(true);
+    setUploadedName(null);
+    const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
+    toast.info(isPdf ? "Membaca isi PDF…" : "AI sedang membaca gambar halaman buku…");
+    try {
+      const r = await extractFile(file);
+      const prev = sourceText.trim();
+      setSourceText(prev ? `${prev}\n\n${r.text}` : r.text);
+      setUploadedName(file.name);
+      toast.success(`Berhasil! ${r.text.length} karakter berhasil diambil dari ${isPdf ? "PDF" : "gambar"}.`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Gagal membaca file.");
+    } finally { setUploading(false); }
+  };
 
   const loadSample = async () => {
     setLoadingSample(true);
@@ -332,13 +362,49 @@ export default function KelolaMateri({ onApplied }) {
 
       {/* Input area */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-6">
-        <div className="flex items-start gap-2 mb-3">
-          <FileText className="w-5 h-5 text-slate-500 mt-0.5" />
-          <div>
-            <div className="font-display font-bold text-slate-900">Tempel Materi dari Buku</div>
-            <div className="text-xs text-slate-500">Salin 1-2 halaman materi dari buku Kurikulum Merdeka, lalu tempel di sini.</div>
+        <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+          <div className="flex items-start gap-2">
+            <FileText className="w-5 h-5 text-slate-500 mt-0.5" />
+            <div>
+              <div className="font-display font-bold text-slate-900">Tempel Materi dari Buku</div>
+              <div className="text-xs text-slate-500">Salin 1-2 halaman materi dari buku Kurikulum Merdeka, lalu tempel di sini.</div>
+            </div>
           </div>
+
+          {/* Upload button next to title */}
+          <label
+            data-testid="btn-upload-file"
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 border-dashed text-sm font-semibold cursor-pointer whitespace-nowrap ${
+              uploading
+                ? "border-teal-300 bg-teal-50 text-teal-700"
+                : "border-teal-400 bg-white text-teal-700 hover:bg-teal-50"
+            }`}
+          >
+            {uploading ? (
+              <><RefreshCw className="w-4 h-4 animate-spin" /> Mengekstrak…</>
+            ) : (
+              <><FileUp className="w-4 h-4" /> Unggah PDF / Foto Buku</>
+            )}
+            <input
+              data-testid="input-file-upload"
+              type="file"
+              accept=".pdf,image/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                handleFile(f);
+              }}
+            />
+          </label>
         </div>
+
+        {uploadedName && !uploading && (
+          <div className="mb-2 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5" data-testid="uploaded-badge">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Teks dari <strong className="mx-0.5">{uploadedName}</strong> ditambahkan ke kotak di bawah.
+          </div>
+        )}
 
         <textarea
           data-testid="input-source-text"
