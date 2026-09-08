@@ -371,10 +371,14 @@ class User(BaseModel):
     name: str
     picture: Optional[str] = None
     is_owner: bool = False
+    role: Optional[str] = None  # "siswa" | "guru"
     created_at: str
 
 class SessionExchange(BaseModel):
     session_id: str
+
+class RoleUpdate(BaseModel):
+    role: str  # "siswa" | "guru"
 
 async def get_current_user(
     request: Request,
@@ -432,12 +436,15 @@ async def auth_session(payload: SessionExchange, response: Response):
         )
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
+        # Owner defaults to guru; everyone else picks role on first visit
+        default_role = "guru" if email == OWNER_EMAIL else None
         await db.users.insert_one({
             "user_id": user_id,
             "email": email,
             "name": name,
             "picture": picture,
             "is_owner": email == OWNER_EMAIL,
+            "role": default_role,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
@@ -471,6 +478,18 @@ async def auth_me(current: User = None, request: Request = None,
                   session_token: Optional[str] = Cookie(default=None),
                   authorization: Optional[str] = Header(default=None)):
     return await get_current_user(request, session_token, authorization)
+
+@api_router.post("/auth/role", response_model=User)
+async def set_role(payload: RoleUpdate,
+                   request: Request = None,
+                   session_token: Optional[str] = Cookie(default=None),
+                   authorization: Optional[str] = Header(default=None)):
+    if payload.role not in ("siswa", "guru"):
+        raise HTTPException(status_code=400, detail="role must be 'siswa' or 'guru'")
+    user = await get_current_user(request, session_token, authorization)
+    await db.users.update_one({"user_id": user.user_id}, {"$set": {"role": payload.role}})
+    updated = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    return User(**updated)
 
 @api_router.post("/auth/logout")
 async def auth_logout(response: Response,
