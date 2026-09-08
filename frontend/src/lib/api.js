@@ -3,7 +3,7 @@ import axios from "axios";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-export const api = axios.create({ baseURL: API, timeout: 60000 });
+export const api = axios.create({ baseURL: API, timeout: 60000, withCredentials: true });
 
 export const getQuiz = () => api.get("/quiz").then((r) => r.data);
 export const submitAnswers = (payload) => api.post("/submissions", payload).then((r) => r.data);
