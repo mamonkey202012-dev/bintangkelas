@@ -1,8 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Cookie, Header, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
+import base64
 import json
 import logging
 import re
@@ -231,6 +233,160 @@ async def get_current_materials():
 @api_router.get("/materials/sample")
 async def get_sample_text():
     return {"source_text": SAMPLE_BOOK_TEXT}
+
+MAX_MATERIAL_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+
+@api_router.post("/materials/extract-text")
+async def extract_material_text(file: UploadFile = File(...)):
+    """Extract readable text from uploaded PDF or Image file."""
+    filename = file.filename or "buku"
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    content_type = (file.content_type or "").lower()
+
+    allowed_exts = {"pdf", "jpg", "jpeg", "png"}
+    if ext not in allowed_exts and not ("pdf" in content_type or "image" in content_type):
+        raise HTTPException(
+            status_code=400,
+            detail="Format file tidak didukung. Mohon unggah file PDF atau gambar (.jpg, .jpeg, .png)."
+        )
+
+    content = await file.read()
+    if len(content) > MAX_MATERIAL_FILE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail="⚠️ Ukuran file maksimal 5 MB. Cukup pilih 1–2 halaman materi yang akan dipelajari saja ya, Bapak/Ibu Guru."
+        )
+
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="File yang diunggah kosong.")
+
+    extracted_text = ""
+
+    # 1. Dokumen PDF
+    if ext == "pdf" or "pdf" in content_type:
+        try:
+            try:
+                from pypdf import PdfReader
+            except ImportError:
+                import pypdf
+                PdfReader = pypdf.PdfReader
+
+            reader = PdfReader(io.BytesIO(content))
+            pages_text = []
+            for page in reader.pages:
+                txt = page.extract_text() or ""
+                if txt.strip():
+                    pages_text.append(txt.strip())
+
+            extracted_text = "\n\n".join(pages_text).strip()
+        except Exception as e:
+            logging.warning(f"pypdf extraction failed: {e}")
+
+        if not extracted_text:
+            raise HTTPException(
+                status_code=422,
+                detail="Tidak ada teks digital yang terbaca dalam file PDF ini. Jika file adalah hasil pindaian/scan, silakan unggah dalam format foto/gambar (.jpg/.png) atau tempel teks secara manual."
+            )
+
+    # 2. Gambar / Foto Buku (JPG, JPEG, PNG)
+    elif ext in {"jpg", "jpeg", "png"} or content_type.startswith("image/"):
+        b64_data = base64.b64encode(content).decode("utf-8")
+        media_type = content_type if content_type.startswith("image/") else ("image/png" if ext == "png" else "image/jpeg")
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("ANTHROPIC_API_KEY")
+
+        # Vision AI via Anthropic Claude
+        if api_key:
+            try:
+                headers = {
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+                payload = {
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 4096,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": b64_data,
+                                    },
+                                },
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Kamu adalah asisten pembaca buku pelajaran sekolah SD Kurikulum Merdeka. "
+                                        "Tolong transkrip (salin) seluruh isi teks materi pelajaran dari foto/gambar halaman buku ini secara akurat dan lengkap. "
+                                        "Pertahankan urutan paragraf, poin-poin, dan penjelasan penting. "
+                                        "HANYA keluarkan isi teks materi buku tanpa salam, pengantar, atau komentar tambahan."
+                                    ),
+                                },
+                            ],
+                        }
+                    ],
+                }
+                async with httpx.AsyncClient(timeout=60.0) as http_client:
+                    res = await http_client.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        text_chunks = [block["text"] for block in data.get("content", []) if block.get("type") == "text"]
+                        extracted_text = "\n\n".join(text_chunks).strip()
+                    else:
+                        logging.warning(f"Anthropic Vision returned status {res.status_code}: {res.text}")
+            except Exception as e:
+                logging.exception(f"Anthropic Vision failed: {e}")
+
+        # Fallback to Gemini if GEMINI_API_KEY is available
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if not extracted_text and gemini_key:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+                g_payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {
+                                    "inline_data": {
+                                        "mime_type": media_type,
+                                        "data": b64_data,
+                                    }
+                                },
+                                {
+                                    "text": "Transkrip seluruh teks materi pelajaran pada foto halaman buku ini secara lengkap dan akurat. HANYA keluarkan isi teks materinya."
+                                }
+                            ]
+                        }
+                    ]
+                }
+                async with httpx.AsyncClient(timeout=60.0) as http_client:
+                    res = await http_client.post(url, json=g_payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            extracted_text = "".join(p.get("text", "") for p in parts).strip()
+            except Exception as ge:
+                logging.exception(f"Gemini Vision failed: {ge}")
+
+        if not extracted_text:
+            raise HTTPException(
+                status_code=502,
+                detail="Layanan AI belum dapat membaca foto halaman buku ini. Pastikan foto cukup jelas dan terang, atau Bapak/Ibu dapat mengetik/menempel teks materi secara manual."
+            )
+
+    return {
+        "text": extracted_text,
+        "filename": filename,
+        "size_bytes": len(content),
+    }
+
 
 class MaterialsGenerate(BaseModel):
     source_text: str

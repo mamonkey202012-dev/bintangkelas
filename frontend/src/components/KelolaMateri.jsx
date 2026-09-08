@@ -1,19 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
 import {
   BookOpen, Download, Sparkles, FileText, ExternalLink, CheckCircle2,
   RefreshCw, Wand2, Save, RotateCcw, Info, Share2, Link as LinkIcon,
-  Copy, History, Trash2, RotateCw, Smile, Zap, Flame
+  Copy, History, Trash2, RotateCw, Smile, Zap, Flame, Paperclip
 } from "lucide-react";
 import {
-  getCurrentMaterials, getSampleText, generateMaterials, applyMaterials, resetMaterials,
+  getCurrentMaterials, getSampleText, extractTextFromMaterialFile, generateMaterials, applyMaterials, resetMaterials,
   listHistory, applyFromHistory, deleteHistory,
 } from "@/lib/api";
 
 const DIFFICULTIES = [
-  { key: "mudah",  label: "Mudah",   sub: "Ingat & sebut ulang", icon: Smile, cls: "from-emerald-400 to-emerald-600" },
-  { key: "sedang", label: "Sedang",  sub: "Paham konsep",        icon: Zap,   cls: "from-sky-400 to-teal-500" },
-  { key: "susah",  label: "Susah",   sub: "Terapkan & analisis", icon: Flame, cls: "from-amber-500 to-rose-500" },
+  { key: "mudah", label: "Mudah", sub: "Ingat & sebut ulang", icon: Smile, cls: "from-emerald-400 to-emerald-600" },
+  { key: "sedang", label: "Sedang", sub: "Paham konsep", icon: Zap, cls: "from-sky-400 to-teal-500" },
+  { key: "susah", label: "Susah", sub: "Terapkan & analisis", icon: Flame, cls: "from-amber-500 to-rose-500" },
 ];
 
 function ShareCard({ topic }) {
@@ -68,7 +68,7 @@ function ShareCard({ topic }) {
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#25D366] hover:bg-[#1FB758] text-white text-sm font-bold shadow whitespace-nowrap"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.002-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.464 3.488"/>
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.002-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.464 3.488" />
               </svg>
               Bagikan lewat WhatsApp
             </a>
@@ -118,9 +118,11 @@ function HistorySection({ onApplied }) {
   };
 
   const badge = (d) => {
-    const map = { mudah: "bg-emerald-50 text-emerald-700 border-emerald-200",
-                  sedang:"bg-sky-50 text-sky-700 border-sky-200",
-                  susah: "bg-rose-50 text-rose-700 border-rose-200" };
+    const map = {
+      mudah: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      sedang: "bg-sky-50 text-sky-700 border-sky-200",
+      susah: "bg-rose-50 text-rose-700 border-rose-200"
+    };
     return map[d] || "bg-slate-50 text-slate-600 border-slate-200";
   };
 
@@ -199,6 +201,65 @@ export default function KelolaMateri({ onApplied }) {
   const [applying, setApplying] = useState(false);
   const [preview, setPreview] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [extracting, setExtracting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input agar file yang sama bisa dipilih ulang jika diperlukan
+    e.target.value = "";
+
+    // 2. Validasi Batas Ukuran File (5 MB)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      toast.error(
+        "⚠️ Ukuran file maksimal 5 MB. Cukup pilih 1–2 halaman materi yang akan dipelajari saja ya, Bapak/Ibu Guru.",
+        { duration: 6000 }
+      );
+      return;
+    }
+
+    // Validasi format file: .pdf, .jpg, .jpeg, .png
+    const fileName = file.name.toLowerCase();
+    const isPdf = fileName.endsWith(".pdf") || file.type === "application/pdf";
+    const isImg =
+      fileName.endsWith(".jpg") ||
+      fileName.endsWith(".jpeg") ||
+      fileName.endsWith(".png") ||
+      file.type.startsWith("image/");
+
+    if (!isPdf && !isImg) {
+      toast.error("Format file tidak didukung. Mohon unggah file PDF atau Foto/Gambar (.jpg, .jpeg, .png).");
+      return;
+    }
+
+    // 3. Ekstraksi Teks
+    setExtracting(true);
+    const toastId = toast.info("⏳ Sedang membaca isi halaman buku...", { duration: 60000 });
+    try {
+      const res = await extractTextFromMaterialFile(file);
+      const text = res?.text || "";
+      if (!text.trim()) {
+        toast.dismiss(toastId);
+        toast.error("Tidak ditemukan teks yang dapat dibaca dari file ini.");
+        return;
+      }
+
+      setSourceText(text);
+      toast.dismiss(toastId);
+      toast.success("✅ Isi halaman buku berhasil dibaca! Bapak/Ibu dapat memeriksa atau mengedit teksnya.");
+    } catch (err) {
+      toast.dismiss(toastId);
+      const detail =
+        err?.response?.data?.detail ||
+        "Gagal membaca isi halaman buku. Silakan coba lagi atau tempel teks secara manual.";
+      toast.error(detail);
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const refresh = async () => {
     const fresh = await getCurrentMaterials();
@@ -290,7 +351,7 @@ export default function KelolaMateri({ onApplied }) {
         </div>
         <a
           data-testid="link-kemdikbud"
-          href="https://buku.kemdikbud.go.id"
+          href="https://buku.kemendikdasmen.go.id/"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold shadow-sm whitespace-nowrap"
@@ -332,20 +393,67 @@ export default function KelolaMateri({ onApplied }) {
 
       {/* Input area */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-6">
-        <div className="flex items-start gap-2 mb-3">
-          <FileText className="w-5 h-5 text-slate-500 mt-0.5" />
-          <div>
-            <div className="font-display font-bold text-slate-900">Tempel Materi dari Buku</div>
-            <div className="text-xs text-slate-500">Salin 1-2 halaman materi dari buku Kurikulum Merdeka, lalu tempel di sini.</div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div className="flex items-start gap-2.5">
+            <FileText className="w-5 h-5 text-teal-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <div className="font-display font-bold text-slate-900 text-base">
+                Materi dari Buku Pelajaran (Unggah File atau Tempel Teks)
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Maksimal 5 MB (cukup 1–2 halaman bab)
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-shrink-0">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf,.png,.jpg,.jpeg,image/png,image/jpeg,application/pdf"
+              className="hidden"
+              data-testid="input-file-materi"
+            />
+            <button
+              type="button"
+              data-testid="btn-upload-file"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={extracting || generating}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-xs sm:text-sm font-semibold transition-colors disabled:opacity-60 shadow-sm whitespace-nowrap"
+            >
+              {extracting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-teal-600" />
+                  <span>Sedang membaca...</span>
+                </>
+              ) : (
+                <>
+                  <Paperclip className="w-4 h-4 text-teal-600" />
+                  <span>📎 Unggah PDF / Foto Buku</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
+
+        {/* Indikator Status Ekstraksi */}
+        {extracting && (
+          <div
+            className="mb-3 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-teal-50/80 border border-teal-200 text-teal-900 text-xs sm:text-sm font-medium animate-pulse"
+            data-testid="indicator-extracting"
+          >
+            <RefreshCw className="w-4 h-4 animate-spin text-teal-600 flex-shrink-0" />
+            <span>⏳ Sedang membaca isi halaman buku...</span>
+          </div>
+        )}
 
         <textarea
           data-testid="input-source-text"
           value={sourceText}
           onChange={(e) => setSourceText(e.target.value)}
           rows={9}
-          placeholder="Tempel cuplikan bab buku di sini… (contoh: BAB 3 Sistem Pencernaan Manusia)"
+          placeholder="Tempel cuplikan bab buku di sini… (contoh: BAB 3 Sistem Pencernaan Manusia) atau unggah PDF/Foto halaman buku di atas"
           className="w-full rounded-xl border border-slate-200 p-3 text-sm text-slate-800 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 resize-y font-mono leading-relaxed"
         />
 
@@ -363,11 +471,10 @@ export default function KelolaMateri({ onApplied }) {
                   data-testid={`difficulty-${d.key}`}
                   onClick={() => setDifficulty(d.key)}
                   disabled={generating}
-                  className={`p-3 rounded-xl border-2 text-left transition-colors ${
-                    active
+                  className={`p-3 rounded-xl border-2 text-left transition-colors ${active
                       ? "border-transparent shadow-md text-white bg-gradient-to-br " + d.cls
                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                  }`}
+                    }`}
                 >
                   <d.icon className={`w-4 h-4 ${active ? "text-white" : "text-slate-500"}`} />
                   <div className="font-bold text-sm mt-1">{d.label}</div>

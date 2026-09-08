@@ -37,14 +37,14 @@ function formatTime(iso) {
 function statusBadge(score, total) {
   const pct = (score / total) * 100;
   if (pct >= 100) return { label: "Sudah Paham", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
-  if (pct >= 67)  return { label: "Cukup Paham", cls: "bg-sky-100 text-sky-700 border-sky-200" };
+  if (pct >= 67) return { label: "Cukup Paham", cls: "bg-sky-100 text-sky-700 border-sky-200" };
   return { label: "Perlu Bimbingan", cls: "bg-amber-100 text-amber-700 border-amber-200" };
 }
 
 const TABS = [
   { k: "materi", num: "1", label: "Siapkan Materi", icon: BookOpen },
-  { k: "rekap",  num: "2", label: "Cek Hasil Kuis Siswa", icon: ClipboardList },
-  { k: "slide",  num: "3", label: "Tayangkan Slide di Kelas", icon: Presentation },
+  { k: "rekap", num: "2", label: "Cek Hasil Kuis Siswa", icon: ClipboardList },
+  { k: "slide", num: "3", label: "Tayangkan Slide di Kelas", icon: Presentation },
   { k: "jurnal", num: "4", label: "Isi Jurnal Harian", icon: NotebookPen },
 ];
 
@@ -109,7 +109,7 @@ export default function ModeGuru() {
         <div>
           <div className="text-[11px] uppercase tracking-widest text-teal-600 font-semibold">Ruang Guru</div>
           <h1 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            Selamat pagi, Bu Guru <span className="text-teal-600">✨</span>
+            Selamat Datang, Guru Hebat <span className="text-teal-600">✨</span>
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             Ikuti 4 langkah di bawah, dari menyiapkan materi malam sebelumnya sampai mengisi jurnal harian.
@@ -127,7 +127,7 @@ export default function ModeGuru() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard testid="stat-total" icon={Users} label="Siswa Sudah Belajar"
-          value={`${analytics.total_students}/${kelasTotal}`} sub={`${Math.round((analytics.total_students/kelasTotal)*100)}% dari kelas`}
+          value={`${analytics.total_students}/${kelasTotal}`} sub={`${Math.round((analytics.total_students / kelasTotal) * 100)}% dari kelas`}
           tint="bg-gradient-to-br from-sky-500 to-sky-600" />
         <StatCard testid="stat-avg" icon={TrendingUp} label="Rata-rata Skor"
           value={`${analytics.avg_score}/${analytics.max_score}`} sub="Kuis kilat 3 soal"
@@ -150,15 +150,13 @@ export default function ModeGuru() {
               key={t.k}
               data-testid={`tab-${t.k}`}
               onClick={() => setTab(t.k)}
-              className={`flex-shrink-0 group flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-colors ${
-                active
+              className={`flex-shrink-0 group flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-colors ${active
                   ? "bg-white border-teal-500 shadow-md"
                   : "bg-white/60 border-slate-200 hover:border-slate-300"
-              }`}
+                }`}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-extrabold text-sm ${
-                active ? "bg-gradient-to-br from-teal-500 to-sky-500 text-white" : "bg-slate-100 text-slate-500"
-              }`}>
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-extrabold text-sm ${active ? "bg-gradient-to-br from-teal-500 to-sky-500 text-white" : "bg-slate-100 text-slate-500"
+                }`}>
                 {t.num}
               </div>
               <div className="text-left">
@@ -235,7 +233,7 @@ export default function ModeGuru() {
             {analytics.misconceptions.map((m, i) => (
               <div key={m.question_id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4" data-testid={`miscon-${m.question_id}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-[11px] font-semibold text-slate-400 uppercase">{`Soal #${i+1} · ${m.concept.replaceAll("_"," ")}`}</div>
+                  <div className="text-[11px] font-semibold text-slate-400 uppercase">{`Soal #${i + 1} · ${m.concept.replaceAll("_", " ")}`}</div>
                   <div className={`text-xs font-bold ${m.wrong_percent >= 50 ? "text-rose-600" : m.wrong_percent >= 30 ? "text-amber-600" : "text-emerald-600"}`}>
                     {m.wrong_percent}% salah
                   </div>
