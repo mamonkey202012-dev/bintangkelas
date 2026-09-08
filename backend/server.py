@@ -234,6 +234,13 @@ async def get_sample_text():
 
 class MaterialsGenerate(BaseModel):
     source_text: str
+    difficulty: Optional[str] = "sedang"  # "mudah" | "sedang" | "susah"
+
+DIFFICULTY_HINTS = {
+    "mudah": "Buat soal SANGAT MUDAH: jawaban tersurat langsung di teks, bahasa sederhana, pertanyaan bertipe C1 (mengingat). Distraktor jelas beda.",
+    "sedang": "Buat soal TINGKAT SEDANG: butuh pemahaman konsep (C2). Bahasa jelas untuk anak Kelas 6 SD. Distraktor masuk akal.",
+    "susah": "Buat soal MENANTANG (C3-C4): siswa harus MENERAPKAN atau MENGANALISIS konsep pada situasi baru sehari-hari. Distraktor menggoda tapi tetap adil.",
+}
 
 @api_router.post("/materials/generate")
 async def generate_materials(payload: MaterialsGenerate):
@@ -242,16 +249,20 @@ async def generate_materials(payload: MaterialsGenerate):
     if not api_key:
         raise HTTPException(status_code=503, detail="Layanan AI belum tersedia")
 
+    difficulty = payload.difficulty if payload.difficulty in DIFFICULTY_HINTS else "sedang"
+    diff_hint = DIFFICULTY_HINTS[difficulty]
+
     system_msg = (
         "Kamu adalah asisten guru IPAS SD Kurikulum Merdeka. "
         "Dari cuplikan buku yang diberikan, buat materi ringkas + kuis untuk siswa Kelas 6 SD (usia 11-12 tahun). "
+        f"TINGKAT KESULITAN KUIS: {difficulty.upper()}. Panduan: {diff_hint} "
         "WAJIB output JSON valid tanpa teks tambahan, format persis: "
         "{\"topic\":\"...\", \"intro\":\"pesan pembuka ramah anak (~30 kata) yang menyebut topik\", "
         "\"materi\":[{\"id\":\"materi1\",\"title\":\"emoji + Materi 1 — judul\",\"text\":\"1-2 paragraf ramah anak; tanda *bintang* untuk bold\"}, ... 3 materi], "
         "\"quiz\":[{\"id\":\"q1\",\"question\":\"...\",\"options\":[{\"key\":\"a\",\"text\":\"...\"},{\"key\":\"b\",\"text\":\"...\"},{\"key\":\"c\",\"text\":\"...\"},{\"key\":\"d\",\"text\":\"...\"}],\"correct\":\"b\",\"concept\":\"kata_kunci_singkat\",\"explanation\":\"kalimat penjelasan singkat\"}, ... 3 soal]}. "
         "Semua Bahasa Indonesia yang mudah dipahami anak SD. JANGAN keluar dari JSON."
     )
-    user_text = f"Cuplikan buku:\n{payload.source_text[:6000]}\n\nBuat materi & kuis. Kembalikan HANYA JSON."
+    user_text = f"Cuplikan buku:\n{payload.source_text[:6000]}\n\nBuat materi & kuis tingkat {difficulty}. Kembalikan HANYA JSON."
 
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -284,6 +295,7 @@ async def generate_materials(payload: MaterialsGenerate):
             "intro": intro,
             "materi": materi,
             "quiz": quiz,
+            "difficulty": difficulty,
             "source": "ai_preview",
         }
     except Exception as e:
@@ -295,19 +307,96 @@ class MaterialsApply(BaseModel):
     intro: str
     materi: List[dict]
     quiz: List[dict]
+    difficulty: Optional[str] = None
 
 @api_router.post("/materials/apply")
-async def apply_materials(payload: MaterialsApply):
-    """Save generated materials as current (used by student side + quiz endpoint)."""
+async def apply_materials(
+    payload: MaterialsApply,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    """Save generated materials as current AND archive to teacher's history."""
+    user = None
+    try:
+        user = await get_current_user(request, session_token, authorization)
+    except HTTPException:
+        pass  # allow anonymous demo apply
+
+    now = datetime.now(timezone.utc).isoformat()
     doc = payload.model_dump()
     doc["_id"] = "current"
     doc["source"] = "ai"
-    doc["applied_at"] = datetime.now(timezone.utc).isoformat()
+    doc["applied_at"] = now
     await db.materials.replace_one({"_id": "current"}, doc, upsert=True)
-    # invalidate old submissions since quiz changed structure
     await db.submissions.delete_many({})
     await db.slide_cache.delete_many({})
-    return {"ok": True, "applied_at": doc["applied_at"]}
+
+    if user:
+        hist_id = uuid.uuid4().hex
+        await db.materials_history.insert_one({
+            "id": hist_id,
+            "user_id": user.user_id,
+            "topic": payload.topic,
+            "intro": payload.intro,
+            "materi": payload.materi,
+            "quiz": payload.quiz,
+            "difficulty": payload.difficulty,
+            "created_at": now,
+        })
+    return {"ok": True, "applied_at": now}
+
+@api_router.get("/materials/history")
+async def list_history(
+    request: Request = None,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    docs = await db.materials_history.find(
+        {"user_id": user.user_id}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {"items": docs}
+
+@api_router.post("/materials/history/{hist_id}/apply")
+async def apply_from_history(
+    hist_id: str,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    hist = await db.materials_history.find_one({"id": hist_id, "user_id": user.user_id}, {"_id": 0})
+    if not hist:
+        raise HTTPException(status_code=404, detail="Materi tidak ditemukan di riwayat")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "_id": "current",
+        "topic": hist["topic"],
+        "intro": hist["intro"],
+        "materi": hist["materi"],
+        "quiz": hist["quiz"],
+        "difficulty": hist.get("difficulty"),
+        "source": "history",
+        "applied_at": now,
+    }
+    await db.materials.replace_one({"_id": "current"}, doc, upsert=True)
+    await db.submissions.delete_many({})
+    await db.slide_cache.delete_many({})
+    return {"ok": True, "applied_at": now}
+
+@api_router.delete("/materials/history/{hist_id}")
+async def delete_history(
+    hist_id: str,
+    request: Request = None,
+    session_token: Optional[str] = Cookie(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
+    user = await get_current_user(request, session_token, authorization)
+    r = await db.materials_history.delete_one({"id": hist_id, "user_id": user.user_id})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Tidak ditemukan")
+    return {"ok": True}
 
 @api_router.post("/materials/reset")
 async def reset_materials():
