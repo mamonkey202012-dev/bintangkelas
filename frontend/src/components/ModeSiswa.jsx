@@ -1,24 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Phone, Video, MoreVertical, ArrowLeft, Send, Smile, Paperclip, Check, CheckCheck, Star } from "lucide-react";
-import { getQuiz, submitAnswers } from "@/lib/api";
+import { getQuiz, submitAnswers, getCurrentMaterials } from "@/lib/api";
 
 function timeNow() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}.${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-const INITIAL_MESSAGES = [
-  {
-    id: "m1",
-    from: "bot",
-    text:
-      "Halo! Besok di kelas kita akan belajar serunya *sistem pencernaan manusia* bareng Bu Guru. Yuk baca rangkuman 3 menit ini dulu biar besok makin paham! Siap?",
-    time: "19.02",
-  },
-];
+const INITIAL_INTRO_TIME = "19.02";
 
-const MATERI = [
+const DEFAULT_INTRO = "Halo! Besok di kelas kita akan belajar serunya *sistem pencernaan manusia* bareng Bu Guru. Yuk baca rangkuman 3 menit ini dulu biar besok makin paham! Siap?";
+
+const DEFAULT_MATERI = [
   {
     id: "materi1",
     title: "🍎 Materi 1 — Perjalanan Makanan",
@@ -40,7 +34,9 @@ const MATERI = [
 ];
 
 export default function ModeSiswa() {
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [intro, setIntro] = useState(DEFAULT_INTRO);
+  const [materi, setMateri] = useState(DEFAULT_MATERI);
+  const [messages, setMessages] = useState([{ id: "m1", from: "bot", text: DEFAULT_INTRO, time: "19.02" }]);
   const [phase, setPhase] = useState("intro"); // intro | materi | quiz | form | done
   const [materiIdx, setMateriIdx] = useState(0);
   const [quiz, setQuiz] = useState([]);
@@ -52,7 +48,25 @@ export default function ModeSiswa() {
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    getQuiz().then((d) => setQuiz(d.questions || []));
+    (async () => {
+      try {
+        const mat = await getCurrentMaterials();
+        if (mat?.materi?.length) {
+          setMateri(mat.materi);
+          setIntro(mat.intro || DEFAULT_INTRO);
+          setMessages([{ id: "m1", from: "bot", text: mat.intro || DEFAULT_INTRO, time: "19.02" }]);
+        }
+        if (mat?.quiz?.length) {
+          setQuiz(mat.quiz);
+        } else {
+          const q = await getQuiz();
+          setQuiz(q.questions || []);
+        }
+      } catch {
+        const q = await getQuiz().catch(() => ({ questions: [] }));
+        setQuiz(q.questions || []);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -74,7 +88,7 @@ export default function ModeSiswa() {
   const handleReady = async () => {
     pushUser("Siap, Kak! 🚀");
     setPhase("materi");
-    await withTyping(700, () => pushBot(MATERI[0].title + "\n\n" + MATERI[0].text));
+    await withTyping(700, () => pushBot(materi[0].title + "\n\n" + materi[0].text));
     setMateriIdx(1);
   };
 
@@ -87,14 +101,14 @@ export default function ModeSiswa() {
 
   const handleNextMateri = async () => {
     pushUser("Lanjut, Kak ✨");
-    if (materiIdx < MATERI.length) {
-      await withTyping(700, () => pushBot(MATERI[materiIdx].title + "\n\n" + MATERI[materiIdx].text));
+    if (materiIdx < materi.length) {
+      await withTyping(700, () => pushBot(materi[materiIdx].title + "\n\n" + materi[materiIdx].text));
       setMateriIdx((i) => i + 1);
     }
-    if (materiIdx + 1 > MATERI.length) {
+    if (materiIdx + 1 > materi.length) {
       setTimeout(async () => {
         await withTyping(900, () =>
-          pushBot("Mantap! Sekarang cek pemahaman kamu dengan *3 soal kilat* ya. Santai aja, ini bukan ulangan 😉")
+          pushBot("Mantap! Sekarang cek pemahaman kamu dengan *soal kilat* ya. Santai aja, ini bukan ulangan 😉")
         );
         setPhase("quiz");
       }, 500);
@@ -239,14 +253,14 @@ export default function ModeSiswa() {
             </div>
           )}
 
-          {phase === "materi" && !typing && materiIdx <= MATERI.length && (
+          {phase === "materi" && !typing && materiIdx <= materi.length && (
             <div className="flex justify-end pt-1">
               <button
                 data-testid="btn-next-materi"
                 onClick={handleNextMateri}
                 className="px-4 py-1.5 rounded-full bg-gradient-to-r from-sky-500 to-teal-500 text-white text-sm font-semibold shadow"
               >
-                {materiIdx < MATERI.length ? `Lanjut Materi ${materiIdx + 1} →` : "Aku siap kuis 📝"}
+                {materiIdx < materi.length ? `Lanjut Materi ${materiIdx + 1} →` : "Aku siap kuis 📝"}
               </button>
             </div>
           )}

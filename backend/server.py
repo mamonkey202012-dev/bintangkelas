@@ -123,6 +123,51 @@ DEFAULT_SLIDES = [
     },
 ]
 
+DEFAULT_INTRO = "Halo! Besok di kelas kita akan belajar serunya *sistem pencernaan manusia* bareng Bu Guru. Yuk baca rangkuman 3 menit ini dulu biar besok makin paham! Siap?"
+
+DEFAULT_MATERI = [
+    {
+        "id": "materi1",
+        "title": "🍎 Materi 1 — Perjalanan Makanan",
+        "text": "Makanan yang kamu kunyah akan lewat *mulut → kerongkongan → lambung → usus halus*. Di mulut, gigi menghaluskan makanan (mekanik) dan air liur mulai memecah karbohidrat. Di lambung diaduk & disiram asam. Di usus halus, sari makanan diserap masuk ke darah.",
+    },
+    {
+        "id": "materi2",
+        "title": "🧪 Materi 2 — Tim Enzim",
+        "text": "*Enzim* adalah pahlawan mini yang memecah nutrisi:\n• Ptialin (mulut) → karbohidrat\n• Pepsin (lambung) → protein\n• Lipase (usus halus) → lemak\nTanpa enzim, tubuh sulit menyerap gizi dari makanan.",
+    },
+    {
+        "id": "materi3",
+        "title": "💧 Materi 3 — Air & Serat",
+        "text": "Di *usus besar*, air & mineral sisa diserap kembali, lalu sisa makanan dibentuk jadi feses. Rajin minum air + makan buah-sayur (serat) = BAB lancar dan perut sehat. Kurang serat? Bisa sembelit.",
+    },
+]
+
+SAMPLE_BOOK_TEXT = """BAB 3 - SISTEM PENCERNAAN MANUSIA
+(Contoh cuplikan buku IPAS Kelas 6 SD Kurikulum Merdeka)
+
+Sistem pencernaan adalah sistem organ dalam tubuh manusia yang bertugas mengolah makanan menjadi zat gizi yang dapat diserap oleh darah dan mengubah sisa makanan menjadi kotoran.
+
+A. Organ Pencernaan
+Organ pencernaan terdiri dari: mulut, kerongkongan (esofagus), lambung, usus halus, usus besar, dan anus. Di dalam mulut, terjadi pencernaan mekanik oleh gigi dan pencernaan kimiawi oleh enzim ptialin yang terkandung di air liur. Ptialin memecah karbohidrat menjadi gula sederhana.
+
+Setelah dikunyah, makanan didorong oleh gerak peristaltik melewati kerongkongan menuju lambung. Di lambung, makanan diaduk-aduk oleh otot lambung dan disiram asam lambung (HCl) serta enzim pepsin yang memecah protein.
+
+Selanjutnya makanan masuk ke usus halus. Di usus halus, sari-sari makanan diserap masuk ke pembuluh darah. Enzim lipase membantu memecah lemak. Panjang usus halus manusia dewasa bisa mencapai 6 meter!
+
+B. Peran Usus Besar
+Sisa makanan yang tidak diserap masuk ke usus besar. Fungsi utama usus besar adalah menyerap air dan mineral, lalu membentuk feses (kotoran). Bakteri baik di usus besar juga membantu proses ini.
+
+C. Menjaga Kesehatan Pencernaan
+Untuk menjaga sistem pencernaan tetap sehat, kita perlu:
+1. Minum air putih minimal 6-8 gelas per hari.
+2. Makan makanan berserat (buah, sayur, biji-bijian).
+3. Mengunyah makanan hingga halus.
+4. Menghindari makanan terlalu pedas atau asam berlebihan.
+5. Rutin BAB setiap hari agar tidak sembelit.
+
+Kekurangan serat dan air menyebabkan feses menjadi keras sehingga sulit dikeluarkan (sembelit). Sebaliknya, makan makanan tidak higienis dapat menyebabkan diare."""
+
 # ============== MODELS ==============
 class QuizAnswer(BaseModel):
     question_id: str
@@ -165,8 +210,112 @@ async def root():
 
 @api_router.get("/quiz")
 async def get_quiz():
-    # Send without correct answer to keep it simple for demo we send full
-    return {"questions": QUIZ_QUESTIONS}
+    mat = await db.materials.find_one({"_id": "current"}, {"_id": 0})
+    if mat and mat.get("quiz"):
+        return {"questions": mat["quiz"], "topic": mat.get("topic", "Sistem Pencernaan Manusia")}
+    return {"questions": QUIZ_QUESTIONS, "topic": "Sistem Pencernaan Manusia"}
+
+@api_router.get("/materials/current")
+async def get_current_materials():
+    mat = await db.materials.find_one({"_id": "current"}, {"_id": 0})
+    if mat:
+        return {**mat, "source": mat.get("source", "custom")}
+    return {
+        "topic": "Sistem Pencernaan Manusia",
+        "intro": DEFAULT_INTRO,
+        "materi": DEFAULT_MATERI,
+        "quiz": QUIZ_QUESTIONS,
+        "source": "default",
+    }
+
+@api_router.get("/materials/sample")
+async def get_sample_text():
+    return {"source_text": SAMPLE_BOOK_TEXT}
+
+class MaterialsGenerate(BaseModel):
+    source_text: str
+
+@api_router.post("/materials/generate")
+async def generate_materials(payload: MaterialsGenerate):
+    """AI: from a raw book excerpt, generate topic + intro + 3 materi + 3 quiz questions."""
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Layanan AI belum tersedia")
+
+    system_msg = (
+        "Kamu adalah asisten guru IPAS SD Kurikulum Merdeka. "
+        "Dari cuplikan buku yang diberikan, buat materi ringkas + kuis untuk siswa Kelas 6 SD (usia 11-12 tahun). "
+        "WAJIB output JSON valid tanpa teks tambahan, format persis: "
+        "{\"topic\":\"...\", \"intro\":\"pesan pembuka ramah anak (~30 kata) yang menyebut topik\", "
+        "\"materi\":[{\"id\":\"materi1\",\"title\":\"emoji + Materi 1 — judul\",\"text\":\"1-2 paragraf ramah anak; tanda *bintang* untuk bold\"}, ... 3 materi], "
+        "\"quiz\":[{\"id\":\"q1\",\"question\":\"...\",\"options\":[{\"key\":\"a\",\"text\":\"...\"},{\"key\":\"b\",\"text\":\"...\"},{\"key\":\"c\",\"text\":\"...\"},{\"key\":\"d\",\"text\":\"...\"}],\"correct\":\"b\",\"concept\":\"kata_kunci_singkat\",\"explanation\":\"kalimat penjelasan singkat\"}, ... 3 soal]}. "
+        "Semua Bahasa Indonesia yang mudah dipahami anak SD. JANGAN keluar dari JSON."
+    )
+    user_text = f"Cuplikan buku:\n{payload.source_text[:6000]}\n\nBuat materi & kuis. Kembalikan HANYA JSON."
+
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"bintangkelas-materi-{uuid.uuid4().hex[:8]}",
+            system_message=system_msg,
+        ).with_model("anthropic", "claude-sonnet-4-6")
+
+        raw = await chat.send_message(UserMessage(text=user_text))
+        text = raw if isinstance(raw, str) else str(raw)
+        match = re.search(r"\{[\s\S]*\}", text)
+        parsed = json.loads(match.group(0) if match else text)
+
+        topic = parsed.get("topic", "Materi IPAS")
+        intro = parsed.get("intro", DEFAULT_INTRO)
+        materi = parsed.get("materi", [])[:3]
+        quiz = parsed.get("quiz", [])[:3]
+        if len(materi) < 3 or len(quiz) < 3:
+            raise ValueError("Materi/quiz tidak lengkap")
+
+        # normalize
+        for i, m in enumerate(materi, 1):
+            m["id"] = m.get("id") or f"materi{i}"
+        for i, q in enumerate(quiz, 1):
+            q["id"] = q.get("id") or f"q{i}"
+
+        return {
+            "topic": topic,
+            "intro": intro,
+            "materi": materi,
+            "quiz": quiz,
+            "source": "ai_preview",
+        }
+    except Exception as e:
+        logging.exception("Materials generation failed")
+        raise HTTPException(status_code=502, detail=f"AI gagal membuat materi: {e}")
+
+class MaterialsApply(BaseModel):
+    topic: str
+    intro: str
+    materi: List[dict]
+    quiz: List[dict]
+
+@api_router.post("/materials/apply")
+async def apply_materials(payload: MaterialsApply):
+    """Save generated materials as current (used by student side + quiz endpoint)."""
+    doc = payload.model_dump()
+    doc["_id"] = "current"
+    doc["source"] = "ai"
+    doc["applied_at"] = datetime.now(timezone.utc).isoformat()
+    await db.materials.replace_one({"_id": "current"}, doc, upsert=True)
+    # invalidate old submissions since quiz changed structure
+    await db.submissions.delete_many({})
+    await db.slide_cache.delete_many({})
+    return {"ok": True, "applied_at": doc["applied_at"]}
+
+@api_router.post("/materials/reset")
+async def reset_materials():
+    await db.materials.delete_many({})
+    await db.submissions.delete_many({})
+    await db.slide_cache.delete_many({})
+    await seed_demo_data()
+    return {"ok": True}
 
 @api_router.post("/submissions", response_model=Submission)
 async def create_submission(payload: SubmissionCreate):

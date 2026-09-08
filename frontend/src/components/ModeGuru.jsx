@@ -2,18 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Users, TrendingUp, AlertTriangle, CheckCircle2, Sparkles, RefreshCw,
-  Presentation, ClipboardList, Copy, Printer, RotateCcw
+  Presentation, ClipboardList, RotateCcw, BookOpen, NotebookPen
 } from "lucide-react";
 import {
-  listSubmissions, getMisconceptions, getDefaultSlides, getLatestSlides, generateSlides, seedDemo
+  listSubmissions, getMisconceptions, getLatestSlides, generateSlides, seedDemo,
 } from "@/lib/api";
 import SlideViewer from "@/components/SlideViewer";
 import JurnalTable from "@/components/JurnalTable";
+import KelolaMateri from "@/components/KelolaMateri";
 
 const StatCard = ({ icon: Icon, label, value, sub, tint, testid }) => (
   <div
     data-testid={testid}
-    className={`bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-start gap-3`}
+    className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-start gap-3"
   >
     <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white ${tint}`}>
       <Icon className="w-5 h-5" />
@@ -35,13 +36,20 @@ function formatTime(iso) {
 
 function statusBadge(score, total) {
   const pct = (score / total) * 100;
-  if (pct >= 100) return { label: "Paham Utuh", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+  if (pct >= 100) return { label: "Sudah Paham", cls: "bg-emerald-100 text-emerald-700 border-emerald-200" };
   if (pct >= 67)  return { label: "Cukup Paham", cls: "bg-sky-100 text-sky-700 border-sky-200" };
-  return { label: "Miskonsepsi", cls: "bg-amber-100 text-amber-700 border-amber-200" };
+  return { label: "Perlu Bimbingan", cls: "bg-amber-100 text-amber-700 border-amber-200" };
 }
 
+const TABS = [
+  { k: "materi", num: "1", label: "Siapkan Materi", icon: BookOpen },
+  { k: "rekap",  num: "2", label: "Cek Hasil Kuis Siswa", icon: ClipboardList },
+  { k: "slide",  num: "3", label: "Tayangkan Slide di Kelas", icon: Presentation },
+  { k: "jurnal", num: "4", label: "Isi Jurnal Harian", icon: NotebookPen },
+];
+
 export default function ModeGuru() {
-  const [tab, setTab] = useState("rekap"); // rekap | slide | jurnal
+  const [tab, setTab] = useState("materi");
   const [submissions, setSubmissions] = useState([]);
   const [analytics, setAnalytics] = useState({ total_students: 0, avg_score: 0, max_score: 3, misconceptions: [] });
   const [slides, setSlides] = useState([]);
@@ -63,9 +71,7 @@ export default function ModeGuru() {
       setSlides(slid.slides || []);
       setSlideSource(slid.source || "default");
       setSlideAt(slid.generated_at || null);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
@@ -84,34 +90,29 @@ export default function ModeGuru() {
       setSlideAt(new Date().toISOString());
       if (res.source === "ai") toast.success("Slide adaptif diperbarui oleh AI!");
       else toast.warning("AI tidak tersedia, memakai slide bawaan.");
-    } catch {
-      toast.error("Gagal memperbarui slide.");
-    } finally {
-      setAiLoading(false);
-    }
+    } catch { toast.error("Gagal memperbarui slide."); }
+    finally { setAiLoading(false); }
   };
 
   const handleResetDemo = async () => {
-    // clear & reseed
     try {
       await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/submissions`, { method: "DELETE" });
       await seedDemo();
-      toast.success("Data demo di-reset.");
+      toast.success("Data contoh dikembalikan.");
       load();
     } catch { toast.error("Gagal reset."); }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8" data-testid="mode-guru-container">
-      {/* Title row */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
         <div>
-          <div className="text-[11px] uppercase tracking-widest text-teal-600 font-semibold">Dashboard KBM</div>
+          <div className="text-[11px] uppercase tracking-widest text-teal-600 font-semibold">Ruang Guru</div>
           <h1 className="font-display text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
             Selamat pagi, Bu Guru <span className="text-teal-600">✨</span>
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Rekap belajar semalam · Materi <span className="font-semibold text-slate-700">Sistem Pencernaan Manusia</span>
+            Ikuti 4 langkah di bawah, dari menyiapkan materi malam sebelumnya sampai mengisi jurnal harian.
           </p>
         </div>
         <button
@@ -119,59 +120,75 @@ export default function ModeGuru() {
           onClick={handleResetDemo}
           className="self-start sm:self-auto inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white"
         >
-          <RotateCcw className="w-3.5 h-3.5" /> Reset Data Demo
+          <RotateCcw className="w-3.5 h-3.5" /> Kembalikan Data Contoh
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard testid="stat-total" icon={Users} label="Siswa Akses"
-          value={`${analytics.total_students}/${kelasTotal}`} sub={`${Math.round((analytics.total_students/kelasTotal)*100)}% kelas`}
+        <StatCard testid="stat-total" icon={Users} label="Siswa Sudah Belajar"
+          value={`${analytics.total_students}/${kelasTotal}`} sub={`${Math.round((analytics.total_students/kelasTotal)*100)}% dari kelas`}
           tint="bg-gradient-to-br from-sky-500 to-sky-600" />
         <StatCard testid="stat-avg" icon={TrendingUp} label="Rata-rata Skor"
-          value={`${analytics.avg_score}/${analytics.max_score}`} sub="Kuis diagnostik 3 soal"
+          value={`${analytics.avg_score}/${analytics.max_score}`} sub="Kuis kilat 3 soal"
           tint="bg-gradient-to-br from-teal-500 to-teal-600" />
-        <StatCard testid="stat-misconception" icon={AlertTriangle} label="Miskonsepsi"
+        <StatCard testid="stat-misconception" icon={AlertTriangle} label="Perlu Dibedah"
           value={analytics.misconceptions.filter(m => m.wrong_percent >= 30).length}
-          sub="Topik perlu dibedah"
+          sub="Topik banyak salah"
           tint="bg-gradient-to-br from-amber-500 to-amber-600" />
-        <StatCard testid="stat-paham" icon={CheckCircle2} label="Paham Utuh"
+        <StatCard testid="stat-paham" icon={CheckCircle2} label="Sudah Paham"
           value={pahamCount} sub={`dari ${analytics.total_students} siswa`}
           tint="bg-gradient-to-br from-emerald-500 to-emerald-600" />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-5 bg-slate-100 p-1 rounded-xl w-full sm:w-fit">
-        {[
-          { k: "rekap", label: "Rekap & Miskonsepsi", icon: ClipboardList },
-          { k: "slide", label: "Slide KBM", icon: Presentation },
-          { k: "jurnal", label: "Jurnal Harian", icon: ClipboardList },
-        ].map((t) => (
-          <button
-            key={t.k}
-            data-testid={`tab-${t.k}`}
-            onClick={() => setTab(t.k)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors ${
-              tab === t.k ? "bg-white text-slate-900 shadow" : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      {/* Numbered step tabs */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-1" data-testid="guru-step-tabs">
+        {TABS.map((t) => {
+          const active = tab === t.k;
+          return (
+            <button
+              key={t.k}
+              data-testid={`tab-${t.k}`}
+              onClick={() => setTab(t.k)}
+              className={`flex-shrink-0 group flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-colors ${
+                active
+                  ? "bg-white border-teal-500 shadow-md"
+                  : "bg-white/60 border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-display font-extrabold text-sm ${
+                active ? "bg-gradient-to-br from-teal-500 to-sky-500 text-white" : "bg-slate-100 text-slate-500"
+              }`}>
+                {t.num}
+              </div>
+              <div className="text-left">
+                <div className={`text-[10px] uppercase tracking-wider font-semibold ${active ? "text-teal-600" : "text-slate-400"}`}>
+                  Langkah {t.num}
+                </div>
+                <div className={`text-sm font-bold flex items-center gap-1.5 ${active ? "text-slate-900" : "text-slate-600"}`}>
+                  <t.icon className="w-3.5 h-3.5" /> {t.label}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {loading && <div className="text-slate-500 text-sm">Memuat data kelas…</div>}
 
+      {!loading && tab === "materi" && (
+        <KelolaMateri onApplied={load} />
+      )}
+
       {!loading && tab === "rekap" && (
         <div className="grid lg:grid-cols-3 gap-5">
-          {/* Table */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <div className="font-display font-bold text-slate-900">Rekap Penyelesaian Kuis</div>
-                <div className="text-xs text-slate-500">Diurutkan berdasarkan waktu kirim terbaru</div>
+                <div className="text-xs text-slate-500">Diurutkan dari kiriman terbaru</div>
               </div>
-              <span className="text-xs text-slate-500">{submissions.length} entri</span>
+              <span className="text-xs text-slate-500">{submissions.length} siswa</span>
             </div>
             <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
               <table className="w-full text-sm" data-testid="submissions-table">
@@ -181,7 +198,7 @@ export default function ModeGuru() {
                     <th className="text-left px-4 py-2 font-semibold">Nama Siswa</th>
                     <th className="text-left px-4 py-2 font-semibold">Waktu Kirim</th>
                     <th className="text-center px-4 py-2 font-semibold">Skor</th>
-                    <th className="text-left px-4 py-2 font-semibold">Status</th>
+                    <th className="text-left px-4 py-2 font-semibold">Pemahaman</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -207,14 +224,13 @@ export default function ModeGuru() {
             </div>
           </div>
 
-          {/* Misconceptions */}
           <div className="space-y-3" data-testid="misconception-cards">
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-1">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <div className="font-display font-bold text-amber-900">Analisis Miskonsepsi</div>
+                <div className="font-display font-bold text-amber-900">Topik yang Perlu Dibedah</div>
               </div>
-              <p className="text-xs text-amber-800/80">Soal dengan tingkat kesalahan tertinggi. Fokus bedah ini di KBM pagi.</p>
+              <p className="text-xs text-amber-800/80">Soal yang paling banyak salah. Fokus bahas ini saat KBM pagi.</p>
             </div>
             {analytics.misconceptions.map((m, i) => (
               <div key={m.question_id} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4" data-testid={`miscon-${m.question_id}`}>
@@ -249,8 +265,9 @@ export default function ModeGuru() {
                 Slide Presentasi Adaptif (5 Slide)
               </div>
               <div className="text-xs text-slate-500 mt-0.5">
-                Sumber: <span className={`font-semibold ${slideSource === "ai" ? "text-teal-600" : "text-slate-600"}`}>
-                  {slideSource === "ai" ? "AI (fokus miskonsepsi terbaru)" : "Bawaan (siap tayang)"}
+                Sumber:{" "}
+                <span className={`font-semibold ${slideSource === "ai" ? "text-teal-600" : "text-slate-600"}`}>
+                  {slideSource === "ai" ? "Dibuat AI (fokus topik banyak salah)" : "Bawaan (siap tayang)"}
                 </span>
                 {slideAt && <> · {formatTime(slideAt)}</>}
               </div>
@@ -262,7 +279,7 @@ export default function ModeGuru() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-teal-500 to-sky-500 text-white text-sm font-semibold shadow disabled:opacity-60"
             >
               {aiLoading ? (
-                <><RefreshCw className="w-4 h-4 animate-spin" /> Menganalisis miskonsepsi…</>
+                <><RefreshCw className="w-4 h-4 animate-spin" /> AI sedang menyiapkan…</>
               ) : (
                 <><Sparkles className="w-4 h-4" /> Perbarui Slide dengan AI</>
               )}
